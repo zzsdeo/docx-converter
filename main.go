@@ -1,11 +1,11 @@
 package main
 
 import (
+	"io/ioutil"
+	"strings"
+
 	"baliance.com/gooxml/document"
 	"baliance.com/gooxml/spreadsheet"
-	"io/ioutil"
-	"log"
-	"strings"
 )
 
 const (
@@ -15,22 +15,23 @@ const (
 )
 
 func main() {
-	docNames, err := getDocxFileNames(workingDir)
-	if err != nil {
-		log.Fatalf("error opening working dir: %s", err)
-	}
+	fire()
+	// docNames, err := getDocxFileNames(workingDir)
+	// if err != nil {
+	// 	log.Fatalf("error opening working dir: %s", err)
+	// }
 
-	ss := spreadsheet.New()
-	sheet := ss.AddSheet()
+	// ss := spreadsheet.New()
+	// sheet := ss.AddSheet()
 
-	for _, docName := range docNames {
-		err := convertTable(docName, &sheet)
-		if err != nil {
-			log.Fatalf("error opening document: %s", err)
-		}
-	}
+	// for _, docName := range docNames {
+	// 	err := convertTable(docName, &sheet)
+	// 	if err != nil {
+	// 		log.Fatalf("error opening document: %s", err)
+	// 	}
+	// }
 
-	ss.SaveToFile(resultXlsxName)
+	// ss.SaveToFile(resultXlsxName)
 }
 
 func convertTable(docName string, sheet *spreadsheet.Sheet) error {
