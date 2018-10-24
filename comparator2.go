@@ -12,9 +12,14 @@ import (
 )
 
 const (
-	defaultFirstDocxName  = "1.docx"
-	defaultSecondDocxName = "2.docx"
+	numOfColumns            = 10
+	defaultFirstDocxName    = "1.docx"
+	defaultSecondDocxName   = "2.docx"
+	complect                = "компл."
+	multiLevelListSeparator = "."
 )
+
+var id int
 
 type Metadata struct {
 	ID     int
@@ -65,7 +70,7 @@ func fire() {
 		return
 	}
 
-	result := compare(uniqueSlice(slice1), uniqueSlice(slice2))
+	result := compare(uniqueSlice(expandComplects(slice1)), uniqueSlice(expandComplects(slice2)))
 
 	ss := spreadsheet.New()
 	sheet := ss.AddSheet()
@@ -90,51 +95,28 @@ func fire() {
 		}
 	}
 
-	sheet = ss.AddSheet()
-	headRow = sheet.AddRow()
-	headRow.AddCell().SetString("Наименование")
-	headRow.AddCell().SetString("Партнумбер")
-	headRow.AddCell().SetString("Ед. изм.")
-	headRow.AddCell().SetString(defaultFirstDocxName)
-
-	for _, item := range uniqueSlice(slice1) {
-		xlsxRow := sheet.AddRow()
-		xlsxRow.AddCell().SetString(item.name)
-		xlsxRow.AddCell().SetString(item.partNumber)
-		xlsxRow.AddCell().SetString(item.measure)
-		xlsxRow.AddCell().SetString(strconv.FormatFloat(item.quantity, 'f', -1, 64))
-	}
-
-	sheet = ss.AddSheet()
-	headRow = sheet.AddRow()
-	headRow.AddCell().SetString("Наименование")
-	headRow.AddCell().SetString("Партнумбер")
-	headRow.AddCell().SetString("Ед. изм.")
-	headRow.AddCell().SetString(defaultSecondDocxName)
-
-	for _, item := range uniqueSlice(slice2) {
-		xlsxRow := sheet.AddRow()
-		xlsxRow.AddCell().SetString(item.name)
-		xlsxRow.AddCell().SetString(item.partNumber)
-		xlsxRow.AddCell().SetString(item.measure)
-		xlsxRow.AddCell().SetString(strconv.FormatFloat(item.quantity, 'f', -1, 64))
-	}
-
 	ss.SaveToFile(resultXlsxName)
 
 }
 
 func convertSpecToSlice(doc *document.Document) ([]Item, error) {
 	var slice []Item
-	var id int
 	for _, table := range doc.Tables() {
+
+	ROW_LOOP:
 		for _, row := range table.Rows() {
+
+			cells := row.Cells()
+
+			//возможно заголовок на несколько колонок, если да, то пропускаем (колонок должно быть 10)
+			if len(cells) < numOfColumns {
+				continue
+			}
+
 			id++
 			item := Item{}
 			item.ID = id
-			var cellNum int
-			for _, cell := range row.Cells() {
-				cellNum++
+			for i, cell := range cells {
 				var text string
 				for _, p := range cell.Paragraphs() {
 					for _, r := range p.Runs() {
@@ -142,18 +124,23 @@ func convertSpecToSlice(doc *document.Document) ([]Item, error) {
 					}
 				}
 				text = strings.TrimSpace(text)
-				switch cellNum {
-				case 2:
+				switch i {
+				case 1:
 					item.position = text
-				case 3:
+				case 2:
+					//если наименование не указано, пропускаем
+					if text == "" {
+						continue ROW_LOOP
+					}
+
 					item.name = text
-				case 4:
+				case 3:
 					item.partNumber = text
-				case 6:
+				case 5:
 					item.vendor = text
-				case 7:
+				case 6:
 					item.measure = text
-				case 8:
+				case 7:
 					if text != "" {
 						f, err := strconv.ParseFloat(text, 64)
 						if err != nil {
@@ -161,7 +148,7 @@ func convertSpecToSlice(doc *document.Document) ([]Item, error) {
 						}
 						item.quantity = f
 					}
-				case 10:
+				case 9:
 					item.comment = text
 				}
 			}
@@ -177,9 +164,9 @@ func uniqueSlice(slice []Item) []Item {
 
 	for _, item := range slice {
 		found := false
-		for _, uniqueItem := range uniqueSlice {
+		for i, uniqueItem := range uniqueSlice {
 			if uniqueItem.name == item.name && uniqueItem.partNumber == item.partNumber && uniqueItem.measure == item.measure {
-				uniqueItem.quantity += item.quantity
+				uniqueSlice[i].quantity += item.quantity
 				found = true
 				break
 			}
@@ -210,7 +197,75 @@ func compare(slice1, slice2 []Item) [][]Item {
 		if !found {
 			var singleItem []Item
 			singleItem = append(singleItem, item1)
+			voidItem := Item{}
+			id++
+			voidItem.ID = id
+			voidItem.name = "VOID"
+			singleItem = append(singleItem, voidItem)
 			result = append(result, singleItem)
+		}
+	}
+
+	var singleItemsFromSlice2 [][]Item
+	found := false
+	for _, item2 := range slice2 {
+		for _, pair := range result {
+			if item2.name == pair[0].name && item2.partNumber == pair[0].partNumber {
+				found = false
+				var singleItem []Item
+				voidItem := Item{}
+				id++
+				voidItem.ID = id
+				voidItem.name = "VOID"
+				singleItem = append(singleItem, voidItem)
+				singleItem = append(singleItem, item2)
+				singleItemsFromSlice2 = append(singleItemsFromSlice2, singleItem)
+			}
+		}
+	}
+
+	for _, pair := range singleItemsFromSlice2 {
+		result = append(result, pair)
+	}
+
+	return result
+}
+
+func expandComplects(slice []Item) []Item {
+	sliceLen := len(slice)
+	var result []Item
+
+	found := false
+	var lastComplectItem Item
+	for i, item := range slice {
+		if found {
+			if strings.HasPrefix(item.position, lastComplectItem.position) {
+				item.quantity *= lastComplectItem.quantity
+				result = append(result, item)
+				continue
+			} else {
+				found = false
+			}
+		}
+
+		if item.measure == complect {
+			if i+1 < sliceLen {
+				if len(strings.Split(slice[i+1].position, multiLevelListSeparator)) == 2 {
+					found = true
+					lastComplectItem = item
+				} else {
+					found = false
+					result = append(result, item)
+					continue
+				}
+			} else {
+				found = false
+				result = append(result, item)
+				continue
+			}
+		} else {
+			found = false
+			result = append(result, item)
 		}
 	}
 
