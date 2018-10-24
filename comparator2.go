@@ -15,17 +15,18 @@ const (
 	numOfColumns            = 10
 	defaultFirstDocxName    = "1.docx"
 	defaultSecondDocxName   = "2.docx"
-	complect                = "компл."
+	kit                     = "компл."
 	multiLevelListSeparator = "."
+	voidItemName            = "VOID"
 )
 
 var id int
 
 type Metadata struct {
-	ID     int
-	system string
-	childs []*Item
-	parent *Item
+	ID       int
+	system   string
+	children []*Item
+	parent   *Item
 }
 
 type Item struct {
@@ -70,7 +71,7 @@ func fire() {
 		return
 	}
 
-	result := compare(uniqueSlice(expandComplects(slice1)), uniqueSlice(expandComplects(slice2)))
+	result := compare(uniqueSlice(expandKits(slice1)), uniqueSlice(expandKits(slice2)))
 
 	ss := spreadsheet.New()
 	sheet := ss.AddSheet()
@@ -84,15 +85,20 @@ func fire() {
 
 	for _, pair := range result {
 		xlsxRow := sheet.AddRow()
-		xlsxRow.AddCell().SetString(pair[0].name)
-		xlsxRow.AddCell().SetString(pair[0].partNumber)
-		xlsxRow.AddCell().SetString(pair[0].measure)
-		xlsxRow.AddCell().SetString(strconv.FormatFloat(pair[0].quantity, 'f', -1, 64))
-		if len(pair) == 2 {
-			xlsxRow.AddCell().SetString(strconv.FormatFloat(pair[1].quantity, 'f', -1, 64))
-			delta := pair[0].quantity - pair[1].quantity
-			xlsxRow.AddCell().SetString(strconv.FormatFloat(delta, 'f', -1, 64))
+		if pair[0].name != voidItemName {
+			xlsxRow.AddCell().SetString(pair[0].name)
+			xlsxRow.AddCell().SetString(pair[0].partNumber)
+			xlsxRow.AddCell().SetString(pair[0].measure)
+			xlsxRow.AddCell().SetString(strconv.FormatFloat(pair[0].quantity, 'f', -1, 64))
+		} else {
+			xlsxRow.AddCell().SetString(pair[1].name)
+			xlsxRow.AddCell().SetString(pair[1].partNumber)
+			xlsxRow.AddCell().SetString(pair[1].measure)
+			xlsxRow.AddCell().SetString(strconv.FormatFloat(pair[0].quantity, 'f', -1, 64))
 		}
+		xlsxRow.AddCell().SetString(strconv.FormatFloat(pair[1].quantity, 'f', -1, 64))
+		delta := pair[0].quantity - pair[1].quantity
+		xlsxRow.AddCell().SetString(strconv.FormatFloat(delta, 'f', -1, 64))
 	}
 
 	ss.SaveToFile(resultXlsxName)
@@ -103,7 +109,7 @@ func convertSpecToSlice(doc *document.Document) ([]Item, error) {
 	var slice []Item
 	for _, table := range doc.Tables() {
 
-	ROW_LOOP:
+	RowLoop:
 		for _, row := range table.Rows() {
 
 			cells := row.Cells()
@@ -130,7 +136,7 @@ func convertSpecToSlice(doc *document.Document) ([]Item, error) {
 				case 2:
 					//если наименование не указано, пропускаем
 					if text == "" {
-						continue ROW_LOOP
+						continue RowLoop
 					}
 
 					item.name = text
@@ -200,27 +206,23 @@ func compare(slice1, slice2 []Item) [][]Item {
 			voidItem := Item{}
 			id++
 			voidItem.ID = id
-			voidItem.name = "VOID"
+			voidItem.name = voidItemName
 			singleItem = append(singleItem, voidItem)
 			result = append(result, singleItem)
 		}
 	}
 
 	var singleItemsFromSlice2 [][]Item
-	found := false
 	for _, item2 := range slice2 {
-		for _, pair := range result {
-			if item2.name == pair[0].name && item2.partNumber == pair[0].partNumber {
-				found = false
-				var singleItem []Item
-				voidItem := Item{}
-				id++
-				voidItem.ID = id
-				voidItem.name = "VOID"
-				singleItem = append(singleItem, voidItem)
-				singleItem = append(singleItem, item2)
-				singleItemsFromSlice2 = append(singleItemsFromSlice2, singleItem)
-			}
+		if !contains(result, item2) {
+			var singleItem []Item
+			voidItem := Item{}
+			id++
+			voidItem.ID = id
+			voidItem.name = voidItemName
+			singleItem = append(singleItem, voidItem)
+			singleItem = append(singleItem, item2)
+			singleItemsFromSlice2 = append(singleItemsFromSlice2, singleItem)
 		}
 	}
 
@@ -231,16 +233,25 @@ func compare(slice1, slice2 []Item) [][]Item {
 	return result
 }
 
-func expandComplects(slice []Item) []Item {
+func contains(slice [][]Item, item Item) bool {
+	for _, s := range slice {
+		if s[0].name == item.name && s[0].partNumber == item.partNumber {
+			return true
+		}
+	}
+	return false
+}
+
+func expandKits(slice []Item) []Item {
 	sliceLen := len(slice)
 	var result []Item
 
 	found := false
-	var lastComplectItem Item
+	var lastKitItem Item
 	for i, item := range slice {
 		if found {
-			if strings.HasPrefix(item.position, lastComplectItem.position) {
-				item.quantity *= lastComplectItem.quantity
+			if strings.HasPrefix(item.position, lastKitItem.position) {
+				item.quantity *= lastKitItem.quantity
 				result = append(result, item)
 				continue
 			} else {
@@ -248,11 +259,11 @@ func expandComplects(slice []Item) []Item {
 			}
 		}
 
-		if item.measure == complect {
+		if item.measure == kit {
 			if i+1 < sliceLen {
 				if len(strings.Split(slice[i+1].position, multiLevelListSeparator)) == 2 {
 					found = true
-					lastComplectItem = item
+					lastKitItem = item
 				} else {
 					found = false
 					result = append(result, item)
