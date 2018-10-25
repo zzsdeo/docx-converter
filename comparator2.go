@@ -107,6 +107,7 @@ func fire() {
 
 func convertSpecToSlice(doc *document.Document) ([]Item, error) {
 	var slice []Item
+	fmt.Println("numbering", *doc.Numbering.Definitions()[1].Levels()[0].X().LvlText.ValAttr) //todo
 	for _, table := range doc.Tables() {
 
 	RowLoop:
@@ -124,15 +125,20 @@ func convertSpecToSlice(doc *document.Document) ([]Item, error) {
 			item.ID = id
 			for i, cell := range cells {
 				var text string
+				fmt.Println("cell", cell.X().EG_BlockLevelElts[0].EG_ContentBlockContent[0].EG_RunLevelElts) //todo
 				for _, p := range cell.Paragraphs() {
+					fmt.Println(p) //todo
 					for _, r := range p.Runs() {
 						text += r.Text()
+						fmt.Println("inner", r.Text()) //todo
 					}
 				}
+				fmt.Println(text) //todo
 				text = strings.TrimSpace(text)
 				switch i {
 				case 1:
 					item.position = text
+					fmt.Println("parsed pos", text) //todo
 				case 2:
 					//если наименование не указано, пропускаем
 					if text == "" {
@@ -260,8 +266,11 @@ func expandKits(slice []Item) []Item {
 		}
 
 		if item.measure == kit {
+			fmt.Println("found kit", item.position+" pos") //todo
 			if i+1 < sliceLen {
-				if len(strings.Split(slice[i+1].position, multiLevelListSeparator)) == 2 {
+				fmt.Println("found i+1", slice[i+1].position)                              //todo
+				if len(strings.Split(slice[i+1].position, multiLevelListSeparator)) == 2 { //todo check it
+					fmt.Println(slice[i+1].position, strings.Split(slice[i+1].position, multiLevelListSeparator), len(strings.Split(slice[i+1].position, multiLevelListSeparator))) //todo
 					found = true
 					lastKitItem = item
 				} else {
