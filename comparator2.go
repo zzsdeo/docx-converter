@@ -13,14 +13,17 @@ import (
 
 const (
 	numOfColumns            = 10
-	defaultFirstDocxName    = "1.docx"
-	defaultSecondDocxName   = "2.docx"
+	defaultFirstDocxName    = "./docs/1.docx"
+	defaultSecondDocxName   = "./docs/2.docx"
 	kit                     = "компл."
 	multiLevelListSeparator = "."
 	voidItemName            = "VOID"
 )
 
-var id int
+var (
+	itemId   int
+	listsMap map[int64][]multiLevelPosition
+)
 
 type Metadata struct {
 	ID       int
@@ -29,9 +32,15 @@ type Metadata struct {
 	parent   *Item
 }
 
+type multiLevelPosition struct {
+	ID       int64
+	position int64
+	level    int64
+}
+
 type Item struct {
 	Metadata
-	position   string
+	position   multiLevelPosition
 	name       string
 	partNumber string
 	vendor     string
@@ -105,9 +114,28 @@ func fire() {
 
 }
 
+func newListPosition(ID, level int64) multiLevelPosition {
+	if lists, ok := listsMap[ID]; ok {
+		if len(lists) == 0 {
+			mll := multiLevelPosition{ID, 1, level}
+			lists = append(lists, mll)
+			listsMap[ID] = lists
+			return mll
+		}
+
+		lastPosition := lists[len(lists)-1]
+		mll := multiLevelPosition{ID, lastPosition.position + 1, level}
+	}
+}
+
 func convertSpecToSlice(doc *document.Document) ([]Item, error) {
 	var slice []Item
-	fmt.Println("numbering", *doc.Numbering.Definitions()[1].Levels()[0].X().LvlText.ValAttr) //todo
+	//for _, def := range doc.Numbering.Definitions() {
+	//	for _, l := range def.Levels() {
+	//		fmt.Println("numbering", l.X()) //todo
+	//	}
+	//}
+	//fmt.Println("numbering", *doc.Numbering.Definitions()[1].Levels()[0].X().LvlText.ValAttr) //todo
 	for _, table := range doc.Tables() {
 
 	RowLoop:
@@ -120,25 +148,33 @@ func convertSpecToSlice(doc *document.Document) ([]Item, error) {
 				continue
 			}
 
-			id++
+			itemId++
 			item := Item{}
-			item.ID = id
+			item.ID = itemId
 			for i, cell := range cells {
 				var text string
-				fmt.Println("cell", cell.X().EG_BlockLevelElts[0].EG_ContentBlockContent[0].EG_RunLevelElts) //todo
+				var listLevel int
+				//fmt.Println("cell", cell.Properties()) //todo
 				for _, p := range cell.Paragraphs() {
-					fmt.Println(p) //todo
+					if p.X().PPr != nil && p.X().PPr.NumPr != nil {
+						fmt.Printf("paragraph %s \n", p.X().PPr.NumPr.Ilvl.ValAttr) //todo
+						listLevel = int(p.X().PPr.NumPr.Ilvl.ValAttr)
+					} else {
+						listLevel = 0
+					}
 					for _, r := range p.Runs() {
 						text += r.Text()
-						fmt.Println("inner", r.Text()) //todo
+						//for _, c := range r.X().EG_RunInnerContent {
+						//	fmt.Printf("inner %s \n", c) //todo
+						//}
 					}
 				}
-				fmt.Println(text) //todo
+				//fmt.Println(text) //todo
 				text = strings.TrimSpace(text)
 				switch i {
 				case 1:
-					item.position = text
-					fmt.Println("parsed pos", text) //todo
+					item.position = strconv.Itoa(item.ID) + multiLevelListSeparator + strconv.Itoa(listLevel)
+					//fmt.Println("parsed pos", text) //todo
 				case 2:
 					//если наименование не указано, пропускаем
 					if text == "" {
@@ -210,8 +246,8 @@ func compare(slice1, slice2 []Item) [][]Item {
 			var singleItem []Item
 			singleItem = append(singleItem, item1)
 			voidItem := Item{}
-			id++
-			voidItem.ID = id
+			itemId++
+			voidItem.ID = itemId
 			voidItem.name = voidItemName
 			singleItem = append(singleItem, voidItem)
 			result = append(result, singleItem)
@@ -223,8 +259,8 @@ func compare(slice1, slice2 []Item) [][]Item {
 		if !contains(result, item2) {
 			var singleItem []Item
 			voidItem := Item{}
-			id++
-			voidItem.ID = id
+			itemId++
+			voidItem.ID = itemId
 			voidItem.name = voidItemName
 			singleItem = append(singleItem, voidItem)
 			singleItem = append(singleItem, item2)
@@ -266,11 +302,11 @@ func expandKits(slice []Item) []Item {
 		}
 
 		if item.measure == kit {
-			fmt.Println("found kit", item.position+" pos") //todo
+			//fmt.Println("found kit", item.position+" pos") //todo
 			if i+1 < sliceLen {
-				fmt.Println("found i+1", slice[i+1].position)                              //todo
+				//fmt.Println("found i+1", slice[i+1].position)                              //todo
 				if len(strings.Split(slice[i+1].position, multiLevelListSeparator)) == 2 { //todo check it
-					fmt.Println(slice[i+1].position, strings.Split(slice[i+1].position, multiLevelListSeparator), len(strings.Split(slice[i+1].position, multiLevelListSeparator))) //todo
+					//fmt.Println(slice[i+1].position, strings.Split(slice[i+1].position, multiLevelListSeparator), len(strings.Split(slice[i+1].position, multiLevelListSeparator))) //todo
 					found = true
 					lastKitItem = item
 				} else {
