@@ -94,7 +94,11 @@ func fire() {
 		xlsxRow.AddCell().SetString(strconv.FormatFloat(delta, 'f', -1, 64))
 	}
 
-	ss.SaveToFile(resultXlsxName)
+	err = ss.SaveToFile(resultXlsxName)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
 }
 
@@ -156,6 +160,12 @@ func convertSpecToSlice(docName string) ([]Item, error) {
 					item.measure = text
 				case 7:
 					if text != "" {
+
+						//если в графе указано "Кол." вместо числового значения, то это заголовок таблицы, пропускаем
+						if text == "Кол." {
+							continue RowLoop
+						}
+
 						f, err := strconv.ParseFloat(text, 64)
 						if err != nil {
 							return nil, err
