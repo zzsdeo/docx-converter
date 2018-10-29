@@ -15,7 +15,9 @@ const (
 )
 
 func main() {
-	fire()
+	//fire()
+	fire2()
+
 	// docNames, err := getDocxFileNames(workingDir)
 	// if err != nil {
 	// 	log.Fatalf("error opening working dir: %s", err)

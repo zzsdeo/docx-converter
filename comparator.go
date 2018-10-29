@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	numOfColumns          = 10
+	numOfSpecColumns      = 10
 	defaultFirstDocxName  = "1.docx"
 	defaultSecondDocxName = "2.docx"
 	kit                   = "компл."
@@ -70,7 +70,7 @@ func fire() {
 	sheet := ss.AddSheet()
 	headRow := sheet.AddRow()
 	headRow.AddCell().SetString("Наименование")
-	headRow.AddCell().SetString("Партнумбер")
+	headRow.AddCell().SetString("Артикул")
 	headRow.AddCell().SetString("Ед. изм.")
 	headRow.AddCell().SetString(defaultFirstDocxName)
 	headRow.AddCell().SetString(defaultSecondDocxName)
@@ -82,16 +82,16 @@ func fire() {
 			xlsxRow.AddCell().SetString(pair[0].name)
 			xlsxRow.AddCell().SetString(pair[0].partNumber)
 			xlsxRow.AddCell().SetString(pair[0].measure)
-			xlsxRow.AddCell().SetString(strconv.FormatFloat(pair[0].quantity, 'f', -1, 64))
+			xlsxRow.AddCell().SetNumber(pair[0].quantity)
 		} else {
 			xlsxRow.AddCell().SetString(pair[1].name)
 			xlsxRow.AddCell().SetString(pair[1].partNumber)
 			xlsxRow.AddCell().SetString(pair[1].measure)
-			xlsxRow.AddCell().SetString(strconv.FormatFloat(pair[0].quantity, 'f', -1, 64))
+			xlsxRow.AddCell().SetNumber(pair[0].quantity)
 		}
-		xlsxRow.AddCell().SetString(strconv.FormatFloat(pair[1].quantity, 'f', -1, 64))
+		xlsxRow.AddCell().SetNumber(pair[1].quantity)
 		delta := pair[1].quantity - pair[0].quantity
-		xlsxRow.AddCell().SetString(strconv.FormatFloat(delta, 'f', -1, 64))
+		xlsxRow.AddCell().SetNumber(delta)
 	}
 
 	err = ss.SaveToFile(resultXlsxName)
@@ -118,7 +118,7 @@ func convertSpecToSlice(docName string) ([]Item, error) {
 			cells := row.Cells()
 
 			//возможно заголовок на несколько колонок, если да, то пропускаем (колонок должно быть 10)
-			if len(cells) < numOfColumns {
+			if len(cells) < numOfSpecColumns {
 				continue
 			}
 
@@ -165,6 +165,8 @@ func convertSpecToSlice(docName string) ([]Item, error) {
 						if text == "Кол." {
 							continue RowLoop
 						}
+
+						text = strings.Replace(text, " ", "", -1)
 
 						f, err := strconv.ParseFloat(text, 64)
 						if err != nil {
@@ -244,9 +246,7 @@ func compare(slice1, slice2 []Item) [][]Item {
 		}
 	}
 
-	for _, pair := range singleItemsFromSlice2 {
-		result = append(result, pair)
-	}
+	result = append(result, singleItemsFromSlice2...)
 
 	return result
 }
